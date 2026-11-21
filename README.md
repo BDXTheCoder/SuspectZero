@@ -1,2 +1,2 @@
 # SuspectZero
-a game with a lot of imposter style gaes
+a game with a lot of imposter style games
