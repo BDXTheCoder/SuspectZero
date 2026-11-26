@@ -2,6 +2,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
 import json
 import os
+import random
 import uuid
 
 app = FastAPI()
@@ -65,24 +66,57 @@ async def websocket_endpoint(websocket: WebSocket):
                 else:
                     await websocket.send_text(json.dumps({"type": "error", "message": "Room not found!"}))
 
-            # Host triggers the game start!
+            # Host starts match -> assigns 1 random Impostor!
             elif action == "start_game":
                 if current_room and current_room in game_rooms and is_host:
-                    game_rooms[current_room]["game_started"] = True
+                    room = game_rooms[current_room]
+                    room["game_started"] = True
+                    
+                    player_ids = list(room["players"].keys())
+                    if player_ids:
+                        imposter_id = random.choice(player_ids)
+                        for pid, conn in room["connections"].items():
+                            role = "Impostor" if pid == imposter_id else "Crewmate"
+                            role_msg = json.dumps({"type": "role_assigned", "role": role})
+                            await conn.send_text(role_msg)
+
                     start_msg = json.dumps({"type": "match_started"})
-                    for conn in game_rooms[current_room]["connections"].values():
+                    for conn in room["connections"].values():
                         await conn.send_text(start_msg)
 
+            # Handle player actions (movement, kills, task updates)
             elif action == "player_update":
                 if current_room and current_room in game_rooms:
-                    game_rooms[current_room]["players"][player_id] = msg.get("state")
+                    room = game_rooms[current_room]
+                    existing_data = room["players"].get(player_id, {})
+                    
+                    # Preserve ghost/alive status if already set
+                    state = msg.get("state")
+                    state["is_ghost"] = existing_data.get("is_ghost", False)
+                    
+                    room["players"][player_id] = state
                     
                     state_data = json.dumps({
                         "type": "game_state",
-                        "players": game_rooms[current_room]["players"]
+                        "players": room["players"]
                     })
-                    for conn in game_rooms[current_room]["connections"].values():
+                    for conn in room["connections"].values():
                         await conn.send_text(state_data)
+
+            # Impostor Kill Action
+            elif action == "kill_player":
+                target_id = msg.get("target_id")
+                if current_room and current_room in game_rooms:
+                    room = game_rooms[current_room]
+                    if target_id in room["players"]:
+                        room["players"][target_id]["is_ghost"] = True
+                        
+                        kill_data = json.dumps({
+                            "type": "game_state",
+                            "players": room["players"]
+                        })
+                        for conn in room["connections"].values():
+                            await conn.send_text(kill_data)
 
     except WebSocketDisconnect:
         if current_room and current_room in game_rooms:
@@ -97,10 +131,6 @@ async def websocket_endpoint(websocket: WebSocket):
                     "players": room["players"]
                 })
                 for conn in room["connections"].values():
-                    try:
-                        await conn.send_text(state_data)
-                    except:
-                        pass
                     try:
                         await conn.send_text(state_data)
                     except:
