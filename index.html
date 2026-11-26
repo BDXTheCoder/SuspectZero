@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>CYBER-NET // Multiplayer Arena</title>
+    <title>SuspectZero // Multiplayer Deduction</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
         
@@ -17,35 +17,25 @@
             color: #00ffcc;
         }
 
-        #menu-screen {
+        #menu-screen, #lobby-screen {
             position: absolute;
-            background: rgba(10, 10, 20, 0.95);
+            background: rgba(10, 10, 20, 0.96);
             padding: 40px;
             border-radius: 8px;
-            box-shadow: 0 0 30px rgba(0, 255, 204, 0.2);
+            box-shadow: 0 0 35px rgba(0, 255, 204, 0.25);
             text-align: center;
-            width: 380px;
+            width: 390px;
             border: 2px solid #00ffcc;
             z-index: 10;
         }
 
-        #lobby-screen {
-            position: absolute;
-            background: rgba(10, 10, 20, 0.95);
-            padding: 40px;
-            border-radius: 8px;
-            box-shadow: 0 0 30px rgba(0, 255, 204, 0.2);
-            text-align: center;
-            width: 380px;
-            border: 2px solid #00ffcc;
-            display: none;
-            z-index: 10;
-        }
+        #lobby-screen { display: none; }
 
         h2 {
             margin-top: 0;
-            letter-spacing: 2px;
-            text-shadow: 0 0 10px rgba(0, 255, 204, 0.5);
+            font-size: 28px;
+            letter-spacing: 3px;
+            text-shadow: 0 0 12px rgba(0, 255, 204, 0.6);
         }
 
         input, button {
@@ -77,7 +67,7 @@
 
         button:hover { 
             background: #fff; 
-            box-shadow: 0 0 15px #fff; 
+            box-shadow: 0 0 18px #fff; 
         }
 
         .checkbox-container {
@@ -95,7 +85,7 @@
         }
 
         #room-list, #player-lobby-list {
-            max-height: 120px;
+            max-height: 130px;
             overflow-y: auto;
             background: #05050a;
             border-radius: 4px;
@@ -128,9 +118,9 @@
 
     <!-- MAIN MENU -->
     <div id="menu-screen">
-        <h2>// CYBER_ARENA</h2>
-        <input type="text" id="roomCodeInput" placeholder="ENTER ROOM CODE">
-        <button onclick="joinPrivateRoom()">ACCESS PRIVATE ROOM</button>
+        <h2>// SUSPECT_ZERO</h2>
+        <input type="text" id="roomCodeInput" placeholder="ENTER SECTOR CODE">
+        <button onclick="joinPrivateRoom()">JOIN PRIVATE SECTOR</button>
         
         <hr style="border-color: #005544; margin: 20px 0;">
         
@@ -138,7 +128,7 @@
             <input type="checkbox" id="isPublicCheck" checked>
             <label for="isPublicCheck">BROADCAST PUBLIC SIGNAL</label>
         </div>
-        <button onclick="createRoom()" style="background: #ff0055; border-color: #ff0055; color: #fff; box-shadow: 0 0 10px rgba(255,0,85,0.4);">INITIALIZE NEW ROOM</button>
+        <button onclick="createRoom()" style="background: #ff0055; border-color: #ff0055; color: #fff; box-shadow: 0 0 10px rgba(255,0,85,0.4);">CREATE NEW SECTOR</button>
 
         <h3 style="margin-top: 20px; font-size: 14px; text-align: left; color: #00ffcc;">ACTIVE SECTORS:</h3>
         <div id="room-list">
@@ -148,12 +138,12 @@
 
     <!-- WAITING LOBBY -->
     <div id="lobby-screen">
-        <h2>// SECTOR WAITING LOBBY</h2>
+        <h2>// STAGING BAY</h2>
         <p>SECTOR CODE: <b id="displayCode" style="color: #ff0055; font-size: 22px; letter-spacing: 2px;">----</b></p>
-        <p style="font-size: 13px; color: #00aa88;">CONNECTED UNITS:</p>
+        <p style="font-size: 13px; color: #00aa88;">CONNECTED OPERATIVES:</p>
         <div id="player-lobby-list"></div>
-        <button id="startMatchBtn" onclick="startMatch()" style="background: #ff0055; border-color: #ff0055; color: #fff; display: none; margin-top: 15px; box-shadow: 0 0 10px rgba(255,0,85,0.4);">INITIATE PROTOCOL</button>
-        <p id="waitingText" style="font-size: 13px; color: #ffbb00; margin-top: 10px;">AWAITING COMMANDER INITIALIZATION...</p>
+        <button id="startMatchBtn" onclick="startMatch()" style="background: #ff0055; border-color: #ff0055; color: #fff; display: none; margin-top: 15px; box-shadow: 0 0 10px rgba(255,0,85,0.4);">DEPLOY TO STATION</button>
+        <p id="waitingText" style="font-size: 13px; color: #ffbb00; margin-top: 10px;">AWAITING HOST DEPLOYMENT...</p>
     </div>
 
     <!-- GAME CANVAS -->
@@ -173,38 +163,120 @@
         const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
         const ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
 
-        const MAP_WIDTH = 2000;
-        const MAP_HEIGHT = 2000;
-        const PLAYER_SIZE = 30;
+        // Expanded 3200 x 3200 Map
+        const MAP_WIDTH = 3200;
+        const MAP_HEIGHT = 3200;
+        const PLAYER_SIZE = 32;
 
+        // Unique Polygon-Shaped Rooms
         const rooms = [
-            { name: "COMMAND DECK", x: 800, y: 200, w: 400, h: 300 },
-            { name: "POWER CORE", x: 200, y: 1200, w: 400, h: 400 },
-            { name: "ARMORY", x: 1400, y: 200, w: 400, h: 300 },
-            { name: "CARGO BAY", x: 800, y: 1200, w: 400, h: 400 }
+            {
+                name: "COMMAND DECK", // Octagon shape
+                labelX: 1600, labelY: 500,
+                color: "rgba(0, 255, 204, 0.06)",
+                border: "#00ffcc",
+                points: [
+                    {x: 1350, y: 200}, {x: 1850, y: 200},
+                    {x: 2050, y: 400}, {x: 2050, y: 700},
+                    {x: 1850, y: 900}, {x: 1350, y: 900},
+                    {x: 1150, y: 700}, {x: 1150, y: 400}
+                ]
+            },
+            {
+                name: "POWER CORE", // Cross / T-Shape
+                labelX: 600, labelY: 1600,
+                color: "rgba(255, 187, 0, 0.06)",
+                border: "#ffbb00",
+                points: [
+                    {x: 400, y: 1200}, {x: 800, y: 1200},
+                    {x: 800, y: 1450}, {x: 1050, y: 1450},
+                    {x: 1050, y: 1850}, {x: 800, y: 1850},
+                    {x: 800, y: 2100}, {x: 400, y: 2100},
+                    {x: 400, y: 1850}, {x: 200, y: 1850},
+                    {x: 200, y: 1450}, {x: 400, y: 1450}
+                ]
+            },
+            {
+                name: "ARMORY", // Hexagon / Wedge
+                labelX: 2550, labelY: 1400,
+                color: "rgba(255, 0, 85, 0.06)",
+                border: "#ff0055",
+                points: [
+                    {x: 2300, y: 1000}, {x: 2800, y: 1000},
+                    {x: 3000, y: 1400}, {x: 2800, y: 1800},
+                    {x: 2300, y: 1800}, {x: 2150, y: 1400}
+                ]
+            },
+            {
+                name: "CARGO BAY", // L-Shape
+                labelX: 1500, labelY: 2650,
+                color: "rgba(138, 43, 226, 0.07)",
+                border: "#a855f7",
+                points: [
+                    {x: 1100, y: 2200}, {x: 1650, y: 2200},
+                    {x: 1650, y: 2550}, {x: 2200, y: 2550},
+                    {x: 2200, y: 2950}, {x: 1100, y: 2950}
+                ]
+            },
+            {
+                name: "MEDBAY", // Diamond / Chamfered Square
+                labelX: 2550, labelY: 2550,
+                color: "rgba(56, 189, 248, 0.06)",
+                border: "#38bdf8",
+                points: [
+                    {x: 2550, y: 2150}, {x: 2950, y: 2550},
+                    {x: 2550, y: 2950}, {x: 2150, y: 2550}
+                ]
+            }
         ];
 
+        // Solid Walls forming corridors & room boundaries
         const walls = [
-            { x: 700, y: 150, w: 600, h: 30 }, { x: 700, y: 550, w: 600, h: 30 },
-            { x: 150, y: 1150, w: 500, h: 30 }, { x: 750, y: 1150, w: 500, h: 30 },
-            { x: 1350, y: 150, w: 30, h: 400 }, { x: 300, y: 600, w: 30, h: 550 }
+            // Command Deck outer dividers
+            { x: 1120, y: 180, w: 960, h: 25 },
+            { x: 1120, y: 180, w: 25, h: 740 },
+            { x: 2055, y: 180, w: 25, h: 740 },
+            { x: 1120, y: 920, w: 380, h: 25 },
+            { x: 1700, y: 920, w: 380, h: 25 },
+
+            // Central Corridor Pillars
+            { x: 1450, y: 1350, w: 300, h: 40 },
+            { x: 1450, y: 1750, w: 300, h: 40 },
+
+            // Power Core Walls
+            { x: 180, y: 1180, w: 650, h: 25 },
+            { x: 180, y: 1180, w: 25, h: 940 },
+            { x: 180, y: 2120, w: 650, h: 25 },
+
+            // Armory Walls
+            { x: 2130, y: 980, w: 890, h: 25 },
+            { x: 3000, y: 980, w: 25, h: 840 },
+            { x: 2130, y: 1820, w: 890, h: 25 },
+
+            // Cargo Bay Walls
+            { x: 1080, y: 2180, w: 25, h: 800 },
+            { x: 1080, y: 2980, w: 1140, h: 25 }
         ];
 
         let tasks = [
-            { id: 1, x: 250, y: 1250, name: "REWIRE GRID", completed: false },
-            { id: 2, x: 950, y: 250, name: "DOWNLOAD DATA", completed: false },
-            { id: 3, x: 1500, y: 250, name: "ALIGN SHIELDS", completed: false },
-            { id: 4, x: 950, y: 1400, name: "PURGE VENT", completed: false }
+            { id: 1, x: 550, y: 1650, name: "STABILIZE REACTOR", completed: false },
+            { id: 2, x: 1600, y: 350, name: "UPLOAD NAV DATA", completed: false },
+            { id: 3, x: 2650, y: 1400, name: "CALIBRATE TURRETS", completed: false },
+            { id: 4, x: 1350, y: 2700, name: "SCAN MANIFEST", completed: false },
+            { id: 5, x: 2550, y: 2550, name: "RUN DIAGNOSTICS", completed: false }
         ];
 
-        let myX = 950, myY = 350;
+        // Spawn inside Command Deck
+        let myX = 1600, myY = 550;
+        let myFacing = "right";
+        let isMoving = false;
         let currentRoomCode = "";
         let isHost = false;
         let matchStarted = false;
 
-        const robotIcons = ["🤖", "🦾", "👾", "🛸"];
-        const myRobotIcon = robotIcons[Math.floor(Math.random() * robotIcons.length)];
-        const myColor = `hsl(${Math.random() * 360}, 100%, 60%)`;
+        // Distinct Vibrant Cyber Suit Colors
+        const suitColors = ["#ff2a55", "#00ffcc", "#ffbb00", "#a855f7", "#38bdf8", "#4ade80", "#fb923c", "#f472b6"];
+        const myColor = suitColors[Math.floor(Math.random() * suitColors.length)];
 
         let allPlayers = {};
         const keys = {};
@@ -246,7 +318,7 @@
                     const pList = document.getElementById("player-lobby-list");
                     pList.innerHTML = "";
                     for (const id in allPlayers) {
-                        pList.innerHTML += `<div class="player-item"><span>CYBER UNIT</span><span style="color: #00ffcc;">READY</span></div>`;
+                        pList.innerHTML += `<div class="player-item"><span>OPERATIVE [${id}]</span><span style="color: #00ffcc;">READY</span></div>`;
                     }
                 }
             } else if (data.type === "error") {
@@ -280,25 +352,105 @@
             for (let task of tasks) {
                 if (!task.completed) {
                     const dist = Math.hypot((myX + PLAYER_SIZE / 2) - task.x, (myY + PLAYER_SIZE / 2) - task.y);
-                    if (dist < 60) task.completed = true;
+                    if (dist < 70) task.completed = true;
                 }
             }
         }
 
-        function gameLoop() {
-            const speed = 6;
-            let nextX = myX, nextY = myY;
+        // Custom Vector Cyber-Operative Sprite Renderer
+        function drawCharacterSprite(x, y, color, facing, moving) {
+            ctx.save();
+            ctx.translate(x + PLAYER_SIZE / 2, y + PLAYER_SIZE / 2);
 
-            if (keys["arrowleft"] || keys["a"]) nextX -= speed;
-            if (keys["arrowright"] || keys["d"]) nextX += speed;
+            // Ground shadow
+            ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
+            ctx.beginPath();
+            ctx.ellipse(0, 18, 16, 6, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Flip horizontally if facing left
+            if (facing === "left") ctx.scale(-1, 1);
+
+            // Walking animation offset
+            const walkCycle = moving ? Math.sin(Date.now() * 0.015) * 4 : 0;
+
+            // Jetpack / Oxygen Tank
+            ctx.fillStyle = "#1e293b";
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.roundRect(-18, -8, 8, 20, 3);
+            ctx.fill();
+            ctx.stroke();
+
+            // Animated Legs
+            ctx.fillStyle = color;
+            ctx.strokeStyle = "#05050a";
+            ctx.lineWidth = 2;
+            // Left Leg
+            ctx.beginPath();
+            ctx.roundRect(-9, 10 - walkCycle, 7, 10, 3);
+            ctx.fill();
+            ctx.stroke();
+            // Right Leg
+            ctx.beginPath();
+            ctx.roundRect(2, 10 + walkCycle, 7, 10, 3);
+            ctx.fill();
+            ctx.stroke();
+
+            // Main Armored Body
+            ctx.fillStyle = color;
+            ctx.beginPath();
+            ctx.roundRect(-12, -16, 24, 28, 10);
+            ctx.fill();
+            ctx.stroke();
+
+            // Glowing Cyber Visor
+            ctx.fillStyle = "#e0f2fe";
+            ctx.shadowColor = "#38bdf8";
+            ctx.shadowBlur = 8;
+            ctx.beginPath();
+            ctx.roundRect(0, -10, 14, 9, 4);
+            ctx.fill();
+            ctx.shadowBlur = 0;
+
+            // Visor Glint
+            ctx.fillStyle = "#ffffff";
+            ctx.fillRect(3, -8, 6, 2);
+
+            // Antenna
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(-2, -16);
+            ctx.lineTo(-5, -24);
+            ctx.stroke();
+            ctx.fillStyle = "#fff";
+            ctx.beginPath();
+            ctx.arc(-5, -24, 2.5, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.restore();
+        }
+
+        function gameLoop() {
+            const speed = 7;
+            let nextX = myX, nextY = myY;
+            isMoving = false;
+
+            if (keys["arrowleft"] || keys["a"]) { nextX -= speed; myFacing = "left"; isMoving = true; }
+            if (keys["arrowright"] || keys["d"]) { nextX += speed; myFacing = "right"; isMoving = true; }
             if (nextX >= 0 && nextX <= MAP_WIDTH - PLAYER_SIZE && !hitsWall(nextX, myY)) myX = nextX;
 
-            if (keys["arrowup"] || keys["w"]) nextY -= speed;
-            if (keys["arrowdown"] || keys["s"]) nextY += speed;
+            if (keys["arrowup"] || keys["w"]) { nextY -= speed; isMoving = true; }
+            if (keys["arrowdown"] || keys["s"]) { nextY += speed; isMoving = true; }
             if (nextY >= 0 && nextY <= MAP_HEIGHT - PLAYER_SIZE && !hitsWall(myX, nextY)) myY = nextY;
 
             if (ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({ action: "player_update", state: { x: myX, y: myY, color: myColor, icon: myRobotIcon } }));
+                ws.send(JSON.stringify({
+                    action: "player_update",
+                    state: { x: myX, y: myY, color: myColor, facing: myFacing, moving: isMoving }
+                }));
             }
 
             let cameraX = Math.max(0, Math.min(myX - canvas.width / 2, MAP_WIDTH - canvas.width));
@@ -308,32 +460,42 @@
             ctx.save();
             ctx.translate(-cameraX, -cameraY);
 
-            // Neon Cyber Grid
+            // Background Grid
             ctx.strokeStyle = "#101025";
             ctx.lineWidth = 2;
             for (let x = 0; x <= MAP_WIDTH; x += 100) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, MAP_HEIGHT); ctx.stroke(); }
             for (let y = 0; y <= MAP_HEIGHT; y += 100) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(MAP_WIDTH, y); ctx.stroke(); }
 
-            // Outer Boundary
+            // Outer Map Perimeter
             ctx.strokeStyle = "#00ffcc";
-            ctx.lineWidth = 4;
+            ctx.lineWidth = 6;
             ctx.strokeRect(0, 0, MAP_WIDTH, MAP_HEIGHT);
 
-            // Rooms
+            // Draw Custom Polygon Rooms
             for (const room of rooms) {
-                ctx.fillStyle = "rgba(0, 255, 204, 0.05)";
-                ctx.fillRect(room.x, room.y, room.w, room.h);
-                ctx.strokeStyle = "#005544";
-                ctx.lineWidth = 2;
-                ctx.strokeRect(room.x, room.y, room.w, room.h);
+                ctx.beginPath();
+                ctx.moveTo(room.points[0].x, room.points[0].y);
+                for (let i = 1; i < room.points.length; i++) {
+                    ctx.lineTo(room.points[i].x, room.points[i].y);
+                }
+                ctx.closePath();
 
-                ctx.fillStyle = "#00ffcc";
-                ctx.font = "bold 24px 'Share Tech Mono', monospace";
+                ctx.fillStyle = room.color;
+                ctx.fill();
+                ctx.strokeStyle = room.border;
+                ctx.lineWidth = 3;
+                ctx.stroke();
+
+                // Room Watermark Label
+                ctx.fillStyle = room.border;
+                ctx.globalAlpha = 0.45;
+                ctx.font = "bold 28px 'Share Tech Mono', monospace";
                 ctx.textAlign = "center";
-                ctx.fillText(room.name, room.x + room.w / 2, room.y + 40);
+                ctx.fillText(room.name, room.labelX, room.labelY);
+                ctx.globalAlpha = 1.0;
             }
 
-            // High-Tech Walls
+            // Draw Walls
             for (const wall of walls) {
                 ctx.fillStyle = "#151525";
                 ctx.fillRect(wall.x, wall.y, wall.w, wall.h);
@@ -342,7 +504,7 @@
                 ctx.strokeRect(wall.x, wall.y, wall.w, wall.h);
             }
 
-            // Tasks
+            // Draw Tasks
             for (const task of tasks) {
                 ctx.fillStyle = task.completed ? "#00ffcc" : "#ffbb00";
                 ctx.beginPath();
@@ -350,30 +512,23 @@
                 ctx.fill();
                 ctx.font = "14px 'Share Tech Mono', monospace";
                 ctx.fillStyle = "#fff";
-                ctx.fillText(task.name + (task.completed ? " [ONLINE]" : " [PRESS E]"), task.x, task.y - 20);
+                ctx.textAlign = "center";
+                ctx.fillText(task.name + (task.completed ? " [COMPLETE]" : " [E]"), task.x, task.y - 22);
             }
 
-            // Players
+            // Draw All Custom Character Sprites
             for (const id in allPlayers) {
                 const p = allPlayers[id];
-                ctx.fillStyle = p.color || "#fff";
-                ctx.beginPath();
-                ctx.arc(p.x + 15, p.y + 15, 18, 0, Math.PI * 2);
-                ctx.fill();
-
-                ctx.font = "26px sans-serif";
-                ctx.textAlign = "center";
-                ctx.textBaseline = "middle";
-                ctx.fillText(p.icon || "🤖", p.x + 15, p.y + 15);
+                drawCharacterSprite(p.x, p.y, p.color || "#00ffcc", p.facing || "right", p.moving || false);
             }
 
             ctx.restore();
 
-            // Flashlight / Scanner Radius when match active
+            // Field of View Radius (Active once deployed)
             if (matchStarted) {
                 const screenPlayerX = (myX - cameraX) + PLAYER_SIZE / 2;
                 const screenPlayerY = (myY - cameraY) + PLAYER_SIZE / 2;
-                const fovRadius = 300;
+                const fovRadius = 330;
 
                 const gradient = ctx.createRadialGradient(screenPlayerX, screenPlayerY, fovRadius * 0.3, screenPlayerX, screenPlayerY, fovRadius);
                 gradient.addColorStop(0, "rgba(5, 5, 10, 0)");
@@ -382,57 +537,84 @@
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
             }
 
-            // HUD Overlays
-            ctx.fillStyle = "rgba(10, 10, 20, 0.85)";
-            ctx.fillRect(20, 20, 180, 45);
+            // Top-Left HUD Badge
+            ctx.fillStyle = "rgba(10, 10, 20, 0.9)";
+            ctx.fillRect(20, 20, 220, 45);
             ctx.strokeStyle = "#00ffcc";
             ctx.lineWidth = 2;
-            ctx.strokeRect(20, 20, 180, 45);
+            ctx.strokeRect(20, 20, 220, 45);
             ctx.fillStyle = "#00ffcc";
             ctx.font = "16px 'Share Tech Mono', monospace";
             ctx.textAlign = "left";
             ctx.textBaseline = "middle";
-            ctx.fillText(`SECTOR: ${currentRoomCode}`, 32, 43);
+            ctx.fillText(`SUSPECT_ZERO // ${currentRoomCode}`, 32, 43);
 
-            // Minimap
-            const mapSize = 180;
+            // --- TOP-RIGHT FULL LAYOUT MINIMAP ---
+            const mapSize = 230;
             const mapX = canvas.width - mapSize - 20;
             const mapY = 20;
             const scale = mapSize / MAP_WIDTH;
 
-            ctx.fillStyle = "rgba(10, 10, 20, 0.85)";
+            ctx.fillStyle = "rgba(8, 8, 16, 0.92)";
             ctx.fillRect(mapX, mapY, mapSize, mapSize);
             ctx.strokeStyle = "#00ffcc";
             ctx.lineWidth = 2;
             ctx.strokeRect(mapX, mapY, mapSize, mapSize);
 
-            ctx.fillStyle = "#151525";
-            for (const wall of walls) {
-                ctx.fillRect(mapX + wall.x * scale, mapY + wall.y * scale, wall.w * scale, wall.h * scale);
+            // Render Polygon Room Shapes & Names on Minimap
+            for (const room of rooms) {
+                ctx.beginPath();
+                ctx.moveTo(mapX + room.points[0].x * scale, mapY + room.points[0].y * scale);
+                for (let i = 1; i < room.points.length; i++) {
+                    ctx.lineTo(mapX + room.points[i].x * scale, mapY + room.points[i].y * scale);
+                }
+                ctx.closePath();
+                ctx.fillStyle = room.color;
+                ctx.fill();
+                ctx.strokeStyle = room.border;
+                ctx.lineWidth = 1;
+                ctx.stroke();
+
+                // Minimap Room Labels
+                ctx.fillStyle = "#ffffff";
+                ctx.font = "bold 8px 'Share Tech Mono', monospace";
+                ctx.textAlign = "center";
+                ctx.textBaseline = "middle";
+                ctx.fillText(room.name, mapX + room.labelX * scale, mapY + room.labelY * scale);
             }
 
+            // Render Walls on Minimap
+            ctx.fillStyle = "#ff0055";
+            for (const wall of walls) {
+                ctx.fillRect(mapX + wall.x * scale, mapY + wall.y * scale, Math.max(1.5, wall.w * scale), Math.max(1.5, wall.h * scale));
+            }
+
+            // Render Tasks on Minimap
             for (const task of tasks) {
                 ctx.fillStyle = task.completed ? "#00ffcc" : "#ffbb00";
-                ctx.fillRect(mapX + task.x * scale - 2, mapY + task.y * scale - 2, 4, 4);
+                ctx.beginPath();
+                ctx.arc(mapX + task.x * scale, mapY + task.y * scale, 2.5, 0, Math.PI * 2);
+                ctx.fill();
             }
 
-            for (const id in allPlayers) {
-                const p = allPlayers[id];
-                ctx.fillStyle = p.color || "#fff";
-                ctx.fillRect(mapX + p.x * scale, mapY + p.y * scale, 4, 4);
-            }
-
-            ctx.fillStyle = "#ff0055";
+            // Render Player Blip (Your Position)
+            ctx.fillStyle = "#ffffff";
+            ctx.shadowColor = "#00ffcc";
+            ctx.shadowBlur = 6;
             ctx.beginPath();
-            ctx.arc(mapX + myX * scale, mapY + myY * scale, 4, 0, Math.PI * 2);
+            ctx.arc(mapX + (myX + PLAYER_SIZE / 2) * scale, mapY + (myY + PLAYER_SIZE / 2) * scale, 4, 0, Math.PI * 2);
             ctx.fill();
+            ctx.shadowBlur = 0;
 
             requestAnimationFrame(gameLoop);
         }
 
         setInterval(() => {
             if (!matchStarted && currentRoomCode && ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({ action: "player_update", state: { x: myX, y: myY, color: myColor, icon: myRobotIcon } }));
+                ws.send(JSON.stringify({
+                    action: "player_update",
+                    state: { x: myX, y: myY, color: myColor, facing: myFacing, moving: isMoving }
+                }));
             }
         }, 100);
     </script>
