@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Multiplayer 2D Game</title>
+    <style>
+        body { margin: 0; background: #1e1e23; display: flex; justify-content: center; align-items: center; height: 100vh; color: white; font-family: sans-serif; }
+        canvas { border: 2px solid #444; background: #121215; }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas" width="600" height="400"></canvas>
+
+    <script>
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+
+        // Automatically use wss:// on Render, or ws:// when testing locally
+        const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+        const ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
+
+        let myX = 300, myY = 200;
+        const myColor = `hsl(${Math.random() * 360}, 70%, 60%)`;
+        let allPlayers = {};
+        const keys = {};
+
+        // Track keyboard input
+        window.addEventListener("keydown", e => keys[e.key.toLowerCase()] = true);
+        window.addEventListener("keyup", e => keys[e.key.toLowerCase()] = false);
+
+        // Receive all player positions from Python server
+        ws.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            allPlayers = data.players;
+        };
+
+        // Main 60 FPS game loop
+        function gameLoop() {
+            const speed = 5;
+            if (keys["arrowleft"] || keys["a"]) myX -= speed;
+            if (keys["arrowright"] || keys["d"]) myX += speed;
+            if (keys["arrowup"] || keys["w"]) myY -= speed;
+            if (keys["arrowdown"] || keys["s"]) myY += speed;
+
+            // Send our position to the server if connected
+            if (ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ x: myX, y: myY, color: myColor }));
+            }
+
+            // Clear screen and draw all players
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            for (const id in allPlayers) {
+                const p = allPlayers[id];
+                ctx.fillStyle = p.color;
+                ctx.fillRect(p.x, p.y, 30, 30);
+            }
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        gameLoop();
+    </script>
+</body>
+</html>
