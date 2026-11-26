@@ -14,12 +14,91 @@
             font-family: sans-serif;
             color: white;
         }
-        canvas { 
-            background: #1a1a24; 
+        /* Menu Screen UI styling */
+        #menu-screen {
+            position: absolute;
+            background: #181820;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+            text-align: center;
+            width: 360px;
+            border: 2px solid #333;
         }
+        input, button {
+            width: 100%;
+            padding: 12px;
+            margin: 8px 0;
+            background: #252533;
+            border: 1px solid #444;
+            color: white;
+            border-radius: 6px;
+            font-size: 16px;
+            box-sizing: border-box;
+        }
+        button {
+            background: #4f46e5;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background 0.2s;
+        }
+        button:hover { background: #6366f1; }
+        .checkbox-container {
+            display: flex;
+            align-items: center;
+            justify-content: start;
+            margin: 10px 0;
+            font-size: 14px;
+        }
+        .checkbox-container input {
+            width: 20px;
+            margin-right: 10px;
+        }
+        #room-list {
+            max-height: 120px;
+            overflow-y: auto;
+            background: #121215;
+            border-radius: 6px;
+            padding: 5px;
+            margin-top: 10px;
+            border: 1px solid #333;
+        }
+        .room-item {
+            padding: 8px;
+            background: #22222e;
+            margin: 4px 0;
+            border-radius: 4px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+        }
+        .room-item:hover { background: #313145; }
+        canvas { display: none; background: #1a1a24; }
     </style>
 </head>
 <body>
+
+    <!-- START MENU SCREEN -->
+    <div id="menu-screen">
+        <h2>🤖 ROBOT ARENA</h2>
+        <input type="text" id="roomCodeInput" placeholder="Enter Private Room Code">
+        <button onclick="joinPrivateRoom()">Join Private Room</button>
+        
+        <hr style="border-color: #333; margin: 15px 0;">
+        
+        <div class="checkbox-container">
+            <input type="checkbox" id="isPublicCheck" checked>
+            <label for="isPublicCheck">Make Room Public</label>
+        </div>
+        <button onclick="createRoom()" style="background: #10b981;">Create New Room</button>
+
+        <h3 style="margin-top: 20px; font-size: 14px; text-align: left;">Active Public Rooms:</h3>
+        <div id="room-list">
+            <div style="color: #777; font-size: 13px; padding: 10px;">Scanning for rooms...</div>
+        </div>
+    </div>
+
+    <!-- GAME CANVAS -->
     <canvas id="gameCanvas"></canvas>
 
     <script>
@@ -40,35 +119,7 @@
         const MAP_HEIGHT = 2000;
         const PLAYER_SIZE = 30;
 
-        // Rooms layout
-        const rooms = [
-            { name: "CAFETERIA", x: 800, y: 200, w: 400, h: 300 },
-            { name: "ELECTRICAL", x: 200, y: 1200, w: 400, h: 400 },
-            { name: "WEAPONS", x: 1400, y: 200, w: 400, h: 300 },
-            { name: "STORAGE", x: 800, y: 1200, w: 400, h: 400 }
-        ];
-
-        // Solid Walls
-        const walls = [
-            { x: 700, y: 150, w: 600, h: 30 },
-            { x: 700, y: 550, w: 600, h: 30 },
-            { x: 150, y: 1150, w: 500, h: 30 },
-            { x: 750, y: 1150, w: 500, h: 30 },
-            { x: 1350, y: 150, w: 30, h: 400 },
-            { x: 300, y: 600, w: 30, h: 550 }
-        ];
-
-        // Interactive Tasks
-        let tasks = [
-            { id: 1, x: 250, y: 1250, name: "Fix Wiring", completed: false },
-            { id: 2, x: 950, y: 250, name: "Download Data", completed: false },
-            { id: 3, x: 1500, y: 250, name: "Align Shields", completed: false },
-            { id: 4, x: 950, y: 1400, name: "Empty Garbage", completed: false }
-        ];
-
-        let myX = 950;
-        let myY = 350;
-        
+        let myX = 950, myY = 350;
         const robotIcons = ["🤖", "🦾", "👾"];
         const myRobotIcon = robotIcons[Math.floor(Math.random() * robotIcons.length)];
         const myColor = `hsl(${Math.random() * 360}, 80%, 60%)`;
@@ -76,65 +127,84 @@
         let allPlayers = {};
         const keys = {};
 
-        window.addEventListener("keydown", e => {
-            keys[e.key.toLowerCase()] = true;
-            // Press 'E' to interact with tasks
-            if (e.key.toLowerCase() === "e") {
-                checkTaskInteraction();
-            }
-        });
-        window.addEventListener("keyup", e => keys[e.key.toLowerCase()] = false);
+        ws.onopen = () => {
+            // Request public rooms list on load
+            fetchRooms();
+            setInterval(fetchRooms, 3000); // Refresh public list every 3 seconds
+        };
 
         ws.onmessage = (event) => {
             const data = JSON.parse(event.data);
-            allPlayers = data.players;
+
+            if (data.type === "room_list") {
+                const listDiv = document.getElementById("room-list");
+                if (data.rooms.length === 0) {
+                    listDiv.innerHTML = '<div style="color: #777; font-size: 13px; padding: 10px;">No public rooms found. Create one!</div>';
+                    return;
+                }
+                listDiv.innerHTML = "";
+                data.rooms.forEach(r => {
+                    listDiv.innerHTML += `
+                        <div class="room-item" onclick="joinPublicRoom('${r.code}')">
+                            <span>Room: <b>${r.code}</b></span>
+                            <span style="color: #10b981;">${r.players} player(s)</span>
+                        </div>
+                    `;
+                });
+            } else if (data.type === "room_joined") {
+                // Hide menu, show game
+                document.getElementById("menu-screen").style.display = "none";
+                canvas.style.display = "block";
+                gameLoop();
+            } else if (data.type === "game_state") {
+                allPlayers = data.players;
+            } else if (data.type === "error") {
+                alert(data.message);
+            }
         };
 
-        function hitsWall(testX, testY) {
-            for (const wall of walls) {
-                if (
-                    testX < wall.x + wall.w &&
-                    testX + PLAYER_SIZE > wall.x &&
-                    testY < wall.y + wall.h &&
-                    testY + PLAYER_SIZE > wall.y
-                ) {
-                    return true;
-                }
+        function fetchRooms() {
+            if (ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ action: "get_rooms" }));
             }
-            return false;
         }
 
-        function checkTaskInteraction() {
-            for (let task of tasks) {
-                if (!task.completed) {
-                    // Check if player is close to the task
-                    const dist = Math.hypot((myX + PLAYER_SIZE/2) - task.x, (myY + PLAYER_SIZE/2) - task.y);
-                    if (dist < 60) {
-                        task.completed = true;
-                        console.log(`Completed task: ${task.name}`);
-                    }
-                }
-            }
+        function createRoom() {
+            const isPublic = document.getElementById("isPublicCheck").checked;
+            ws.send(JSON.stringify({ action: "create_room", is_public: isPublic }));
         }
+
+        function joinPrivateRoom() {
+            const code = document.getElementById("roomCodeInput").value;
+            if (!code) {
+                alert("Please enter a room code!");
+                return;
+            }
+            ws.send(JSON.stringify({ action: "join_room", code: code }));
+        }
+
+        function joinPublicRoom(code) {
+            ws.send(JSON.stringify({ action: "join_room", code: code }));
+        }
+
+        // Keyboard tracking
+        window.addEventListener("keydown", e => keys[e.key.toLowerCase()] = true);
+        window.addEventListener("keyup", e => keys[e.key.toLowerCase()] = false);
 
         function gameLoop() {
             const speed = 6;
-            let nextX = myX;
-            let nextY = myY;
-
-            if (keys["arrowleft"] || keys["a"]) nextX -= speed;
-            if (keys["arrowright"] || keys["d"]) nextX += speed;
-            if (nextX >= 0 && nextX <= MAP_WIDTH - PLAYER_SIZE && !hitsWall(nextX, myY)) myX = nextX;
-
-            if (keys["arrowup"] || keys["w"]) nextY -= speed;
-            if (keys["arrowdown"] || keys["s"]) nextY += speed;
-            if (nextY >= 0 && nextY <= MAP_HEIGHT - PLAYER_SIZE && !hitsWall(myX, nextY)) myY = nextY;
+            if ((keys["arrowleft"] || keys["a"]) && myX > 0) myX -= speed;
+            if ((keys["arrowright"] || keys["d"]) && myX < MAP_WIDTH - PLAYER_SIZE) myX += speed;
+            if ((keys["arrowup"] || keys["w"]) && myY > 0) myY -= speed;
+            if ((keys["arrowdown"] || keys["s"]) && myY < MAP_HEIGHT - PLAYER_SIZE) myY += speed;
 
             if (ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({ x: myX, y: myY, color: myColor, icon: myRobotIcon }));
+                ws.send(JSON.stringify({
+                    action: "player_update",
+                    state: { x: myX, y: myY, color: myColor, icon: myRobotIcon }
+                }));
             }
 
-            // Camera Tracking
             let cameraX = Math.max(0, Math.min(myX - canvas.width / 2, MAP_WIDTH - canvas.width));
             let cameraY = Math.max(0, Math.min(myY - canvas.height / 2, MAP_HEIGHT - canvas.height));
 
@@ -143,7 +213,7 @@
             ctx.save();
             ctx.translate(-cameraX, -cameraY);
 
-            // 1. Draw Grid
+            // Draw grid lines
             ctx.strokeStyle = "#252533";
             ctx.lineWidth = 2;
             const gridSize = 100;
@@ -154,35 +224,7 @@
                 ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(MAP_WIDTH, y); ctx.stroke();
             }
 
-            // 2. Draw Room Labels
-            ctx.fillStyle = "rgba(255, 255, 255, 0.15)";
-            ctx.font = "bold 24px sans-serif";
-            ctx.textAlign = "center";
-            for (const room of rooms) {
-                ctx.fillText(room.name, room.x + room.w / 2, room.y + room.h / 2);
-            }
-
-            // 3. Draw Walls
-            for (const wall of walls) {
-                ctx.fillStyle = "#3a3a4c";
-                ctx.fillRect(wall.x, wall.y, wall.w, wall.h);
-                ctx.strokeStyle = "#5a5a75";
-                ctx.lineWidth = 3;
-                ctx.strokeRect(wall.x, wall.y, wall.w, wall.h);
-            }
-
-            // 4. Draw Tasks
-            for (const task of tasks) {
-                ctx.fillStyle = task.completed ? "#00ff88" : "#ffcc00";
-                ctx.beginPath();
-                ctx.arc(task.x, task.y, 15, 0, Math.PI * 2);
-                ctx.fill();
-                ctx.font = "12px sans-serif";
-                ctx.fillStyle = "#fff";
-                ctx.fillText(task.name, task.x, task.y - 20);
-            }
-
-            // 5. Draw All Players
+            // Draw all players in room
             for (const id in allPlayers) {
                 const p = allPlayers[id];
                 const cx = p.x + PLAYER_SIZE / 2;
@@ -201,7 +243,7 @@
 
             ctx.restore();
 
-            // --- FIELD OF VIEW LIGHT ---
+            // Field of view lighting overlay
             const screenPlayerX = (myX - cameraX) + PLAYER_SIZE / 2;
             const screenPlayerY = (myY - cameraY) + PLAYER_SIZE / 2;
             const fovRadius = 280;
@@ -215,47 +257,8 @@
             ctx.fillStyle = gradient;
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // --- TOP-RIGHT MINIMAP ---
-            const mapSize = 180;
-            const mapX = canvas.width - mapSize - 20;
-            const mapY = 20;
-            const scale = mapSize / MAP_WIDTH;
-
-            ctx.fillStyle = "rgba(10, 10, 15, 0.85)";
-            ctx.fillRect(mapX, mapY, mapSize, mapSize);
-            ctx.strokeStyle = "#444466";
-            ctx.lineWidth = 2;
-            ctx.strokeRect(mapX, mapY, mapSize, mapSize);
-
-            // Draw walls on minimap
-            ctx.fillStyle = "#555";
-            for (const wall of walls) {
-                ctx.fillRect(mapX + wall.x * scale, mapY + wall.y * scale, wall.w * scale, wall.h * scale);
-            }
-
-            // Draw tasks on minimap (yellow if active, green if done)
-            for (const task of tasks) {
-                ctx.fillStyle = task.completed ? "#00ff88" : "#ffcc00";
-                ctx.fillRect(mapX + task.x * scale - 2, mapY + task.y * scale - 2, 4, 4);
-            }
-
-            // Draw other players on minimap as red/colored dots
-            for (const id in allPlayers) {
-                const p = allPlayers[id];
-                ctx.fillStyle = p.color || "#fff";
-                ctx.fillRect(mapX + p.x * scale, mapY + p.y * scale, 4, 4);
-            }
-
-            // Draw yourself on minimap as a bright white dot
-            ctx.fillStyle = "#ffffff";
-            ctx.beginPath();
-            ctx.arc(mapX + myX * scale, mapY + myY * scale, 4, 0, Math.PI * 2);
-            ctx.fill();
-
             requestAnimationFrame(gameLoop);
         }
-
-        gameLoop();
     </script>
 </body>
 </html>
